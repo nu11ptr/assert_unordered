@@ -92,12 +92,13 @@ use std::collections::HashSet;
 /// let actual = vec![MyType(2), MyType(0), MyType(4)];
 ///
 /// assert_eq_unordered_sort!(expected, actual);
-///  
-/// // Output:
-/// //
-/// // thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-/// // In left, not in right: "{MyType(1), MyType(5)}"
-/// // In right, not in left: "{MyType(0)}"'
+///  ```
+///
+/// Output:
+/// ```text
+/// thread 'tests::test' panicked at 'The left did not contain the same items as the right:
+/// In left, not in right: "{MyType(1), MyType(5)}"
+/// In right, not in left: "{MyType(0)}"'
 /// ```
 #[macro_export]
 macro_rules! assert_eq_unordered_sort {
@@ -131,9 +132,9 @@ macro_rules! assert_eq_unordered_sort {
 /// Which macro to use largely depends on the use case. This macro is fairly efficient at finding
 /// differences, but since it loads elements in to a set, it will NOT panic if there are duplicate
 /// elements even if the collections have different lengths. It also requires [Eq] and [Hash]
-/// implemented on its elements.
+/// implemented on its elements. This is also the only macro that requires `std`.
 ///
-/// # Example
+/// # Examples
 /// ```should_panic
 /// use assert_unordered::assert_eq_unordered_set;
 ///
@@ -144,12 +145,28 @@ macro_rules! assert_eq_unordered_sort {
 /// let actual = vec![MyType(2), MyType(0), MyType(4)];
 ///
 /// assert_eq_unordered_set!(expected, actual);
-///  
-/// // Output:
-/// //
-/// // thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-/// // In left, not in right: "{MyType(1), MyType(5)}"
-/// // In right, not in left: "{MyType(0)}"'
+///  ```
+///
+/// Output:
+/// ```text
+/// thread 'tests::test' panicked at 'The left did not contain the same items as the right:
+/// In left, not in right: "{MyType(1), MyType(5)}"
+/// In right, not in left: "{MyType(0)}"'
+/// ```
+///
+/// # Limitations
+/// Be aware that since using a set, this will NOT panic. If this does not work, consider one of the
+/// other two macros.
+/// ```
+/// use assert_unordered::assert_eq_unordered_set;
+///
+/// #[derive(Debug, Eq, Hash, PartialEq)]
+/// struct MyType(i32);
+///
+/// let expected = vec![MyType(2), MyType(4), MyType(4)];
+/// let actual = vec![MyType(4), MyType(2)];
+///
+/// assert_eq_unordered_set!(expected, actual);
 /// ```
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
@@ -199,14 +216,29 @@ macro_rules! assert_eq_unordered_set {
 /// let actual = vec![MyType(2), MyType(0), MyType(4)];
 ///
 /// assert_eq_unordered!(expected, actual);
-///  
-/// // Output:
-/// //
-/// // thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-/// // In left, not in right: "[MyType(1), MyType(5)]"
-/// // In right, not in left: "[MyType(0)]"'
+///  ```
+///
+/// Output:
+/// ```text
+/// thread 'tests::test' panicked at 'The left did not contain the same items as the right:
+/// In left, not in right: "{MyType(1), MyType(5)}"
+/// In right, not in left: "{MyType(0)}"'
 /// ```
 ///
+/// # Limitations
+/// Be aware that since we cannot sort, this will NOT panic. If this does not work, consider the
+/// [assert_eq_unordered_sort] macro which does not have this limitation.
+/// ```
+/// use assert_unordered::assert_eq_unordered;
+///
+/// #[derive(Debug, PartialEq)]
+/// struct MyType(i32);
+///
+/// let expected = vec![MyType(2), MyType(2), MyType(2), MyType(4)];
+/// let actual = vec![MyType(2), MyType(4), MyType(4), MyType(4)];
+///
+/// assert_eq_unordered!(expected, actual);
+/// ```
 #[macro_export]
 macro_rules! assert_eq_unordered {
     ($left:expr, $right:expr $(,)?) => {
