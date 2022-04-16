@@ -10,11 +10,13 @@
 //! In contrast, this crate only works with collections (types that implement `IntoIterator`) and
 //! therefore shows only the differences (see below for an example of what the output looks like).
 //!
-//! Both [assert_eq_unordered] and [assert_eq_unordered_set] perform the same function, but with
-//! different levels of efficiency on inequality. For large collections, or when the more stringent
-//! trait requirements can be met, [assert_eq_unordered_set] should probably be preferred. However,
-//! [assert_eq_unordered] only requires [PartialEq] and [Debug] on its elements, which is handy for
-//! types with very few trait implementations.
+//! [assert_eq_unordered], [assert_eq_unordered_sort], and [assert_eq_unordered_set] perform the same
+//! function, but with different trait requirements, efficiency, and limitations. For large collections,
+//! and when the more stringent trait requirements can be met, [assert_eq_unordered_set] might make sense.
+//! However, [assert_eq_unordered] only requires [PartialEq] and [Debug] on its elements, which is handy for
+//! types with very few trait implementations. Lastly, [assert_eq_unordered_sort] has no limitations,
+//! but has more stringent trait requirements and can still be inefficient. More details on each,
+//! their exact requirements and limitations can be found in their specific documentation sections.
 //!
 //! # Example
 //! ```should_panic
@@ -72,7 +74,7 @@ use std::collections::HashSet;
 /// # Efficiency
 /// If `$left` and `$right` are equal, this assertion is quite efficient just doing a regular equality
 /// check and then returning. If they are not equal, `$left` and `$right` are sorted and compared again.
-/// If still unequal, they are compared on an element by element basis (meaning it is at least least
+/// If still unequal, they are compared on an element by element basis (meaning it is at least
 /// O(n^2 * 2) algorithmic complexity in the non-equality path)
 ///
 /// # Which macro?
