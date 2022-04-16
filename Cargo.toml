@@ -1,6 +1,14 @@
 [package]
 name = "assert_unordered"
 version = "0.1.0"
+authors = ["Scott Meeuwsen <smeeuwsen@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "A direct replacement for `assert_eq` for unordered collections"
+repository = "https://github.com/nu11ptr/assert_unordered"
+documentation = "https://docs.rs/assert_unordered"
+keywords = ["testing", "assert", "assertion", "diff"]
+categories = ["development-tools::testing", "no-std", "rust-patterns"]
+readme = "README.md"
 edition = "2021"
 
 [package.metadata.docs.rs]
@@ -10,5 +18,3 @@ rustc-args = ["--cfg", "docsrs"]
 [features]
 default = ["std"]
 std = []
-
-[dependencies]

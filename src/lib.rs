@@ -3,6 +3,51 @@
 #![warn(missing_docs)]
 
 //! A direct replacement for `assert_eq` for unordered collections
+//!
+//! These macros are useful for any situation where the ordering of the collection doesn't matter, even
+//! if they are always in the same order. This is because the stdlib `assert_eq` shows the entire
+//! collection for both left and right and leaves it up to the user to visually scan for differences.
+//! In contrast, this crate only works with collections (types that implement `IntoIterator`) and
+//! therefore shows only the differences (see below for an example of what the output looks like).
+//!
+//! Both [assert_eq_unordered] and [assert_eq_unordered_set] perform the same function, but with
+//! different levels of efficiency on inequality. For large collections, or when the more stringent
+//! trait requirements can be met, [assert_eq_unordered_set] should probably be preferred. However,
+//! [assert_eq_unordered] only requires [PartialEq] and [Debug] on its elements, which is handy for
+//! types with very few trait implementations.
+//!
+//! # Example
+//! ```should_panic
+//! use assert_unordered::assert_eq_unordered;
+//!
+//! #[derive(Debug, PartialEq)]
+//! struct MyType(i32);
+//!
+//! let expected = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
+//! let actual = vec![MyType(2), MyType(0), MyType(4)];
+//!
+//! assert_eq_unordered!(expected, actual);
+//! ```
+//!
+//! Output:
+//! ```text
+//! thread 'tests::test' panicked at 'The left did not contain the same items as the right:
+//! In left, not in right: "[MyType(1), MyType(5)]"
+//! In right, not in left: "[MyType(0)]"'
+//! ```
+
+// Trick to test README samples (from: https://github.com/rust-lang/cargo/issues/383#issuecomment-720873790)
+#[cfg(doctest)]
+mod test_readme {
+    macro_rules! external_doc_test {
+        ($x:expr) => {
+            #[doc = $x]
+            extern "C" {}
+        };
+    }
+
+    external_doc_test!(include_str!("../README.md"));
+}
 
 extern crate alloc;
 
