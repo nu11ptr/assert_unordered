@@ -5,31 +5,18 @@
 
 A direct replacement for `assert_eq` for unordered collections
 
-These macros are useful for any situation where the ordering of the collection doesn't matter, even
+This macro is useful for any situation where the ordering of the collection doesn't matter, even
 if they are always in the same order. This is because the stdlib `assert_eq` shows the entire
 collection for both left and right and leaves it up to the user to visually scan for differences.
 In contrast, this crate only works with collections (types that implement `IntoIterator`) and
-therefore shows only the differences, when possible (see below for an example of what the output 
-looks like).
+therefore can show only the differences (see below for an example of what the output looks like).
 
 ## Usage
 
-NOTE: Specifying `no-default-features` will allow this crate to be used in a
-`no-std` environment, but without the `assert_eq_ordered_set` macro.
-
 ```toml
 [dev-dependencies]
-assert_unordered = "0.2"
+assert_unordered = "0.3"
 ```
-
-## Which Macro?
-
-There are three macros in this crate that do roughly the same thing. To decide
-which of the three makes sense for your use case, please read the documentation on each macro:
-
-* [assert_eq_unordered](https://docs.rs/assert_unordered/latest/assert_unordered/macro.assert_eq_unordered.html)
-* [assert_eq_unordered_set](https://docs.rs/assert_unordered/latest/assert_unordered/macro.assert_eq_unordered_set.html)
-* [assert_eq_unordered_sort](https://docs.rs/assert_unordered/latest/assert_unordered/macro.assert_eq_unordered_sort.html)
 
 ## Example
 ```rust, should_panic
@@ -49,8 +36,9 @@ fn main() {
 Output:
 ```text
 thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-In left, not in right: "[MyType(1), MyType(5)]"
-In right, not in left: "[MyType(0)]"'
+In both: "[MyType(2), MyType(4)]"
+In left: "[MyType(1), MyType(5)]"
+In right: "[MyType(0)]"'
 ```
 
 ## License
