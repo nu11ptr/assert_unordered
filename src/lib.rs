@@ -163,21 +163,40 @@ macro_rules! assert_eq_unordered {
 }
 
 #[doc(hidden)]
-pub fn pass_or_panic(left_right: Option<(String, String)>, msg: Option<Arguments>) {
-    if let Some((in_left_not_right, in_right_not_left)) = left_right {
-        let msg = match msg {
-            Some(msg) => msg,
-            // TODO: 1.60 `format_args` not yet stable on 'const fn'. Maybe soon?
-            None => format_args!("The left did not contain the same items as the right"),
-        };
+pub enum CompareResult {
+    Equal,
+    NotEqualDiffElements(String, String),
+    NotEqualDupElemDiffLen(String, String),
+}
 
-        panic!("{msg}:\nIn left, not in right: {in_left_not_right:?}\nIn right, not in left: {in_right_not_left:?}");
+#[doc(hidden)]
+pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
+    match result {
+        CompareResult::NotEqualDiffElements(in_left_not_right, in_right_not_left) => {
+            let msg = match msg {
+                Some(msg) => msg,
+                // TODO: 1.60 `format_args` not yet stable on 'const fn'. Maybe soon?
+                None => format_args!("The left did not contain the same items as the right"),
+            };
+
+            panic!("{msg}:\nIn left, not in right: {in_left_not_right:?}\nIn right, not in left: {in_right_not_left:?}");
+        }
+        CompareResult::NotEqualDupElemDiffLen(left, right) => {
+            let msg = match msg {
+                Some(msg) => msg,
+                // TODO: 1.60 `format_args` not yet stable on 'const fn'. Maybe soon?
+                None => format_args!("The left is not the same length as the right, and there are duplicate elements"),
+            };
+
+            panic!("{msg}:\nLeft: {left:?}\nRight: {right:?}");
+        }
+        CompareResult::Equal => {}
     }
 }
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub fn compare_unordered_set<I, T>(left: I, right: I) -> Option<(String, String)>
+pub fn compare_unordered_set<I, T>(left: I, right: I) -> CompareResult
 where
     I: IntoIterator<Item = T> + PartialEq,
     T: Debug + Eq + Hash,
@@ -185,26 +204,26 @@ where
     // First, try for the easy (and faster compare)
     if left != right {
         // Fallback on the slow difference path
-        let left: HashSet<_> = left.into_iter().collect();
-        let right: HashSet<_> = right.into_iter().collect();
+        let left_set: HashSet<_> = left.into_iter().collect();
+        let right_set: HashSet<_> = right.into_iter().collect();
 
-        if left != right {
-            let in_left_not_right: HashSet<_> = left.difference(&right).collect();
-            let in_right_not_left: HashSet<_> = right.difference(&left).collect();
-            Some((
+        if left_set != right_set {
+            let in_left_not_right: HashSet<_> = left_set.difference(&right_set).collect();
+            let in_right_not_left: HashSet<_> = right_set.difference(&left_set).collect();
+            CompareResult::NotEqualDiffElements(
                 format!("{in_left_not_right:?}"),
                 format!("{in_right_not_left:?}"),
-            ))
+            )
         } else {
-            None
+            CompareResult::Equal
         }
     } else {
-        None
+        CompareResult::Equal
     }
 }
 
 #[doc(hidden)]
-pub fn compare_unordered<I, T>(left: I, right: I) -> Option<(String, String)>
+pub fn compare_unordered<I, T>(left: I, right: I) -> CompareResult
 where
     I: IntoIterator<Item = T> + PartialEq,
     T: Debug + PartialEq,
@@ -219,27 +238,29 @@ where
         let in_right_not_left: Vec<_> = right.iter().filter(|&t| !left.contains(t)).collect();
 
         if !in_left_not_right.is_empty() || !in_right_not_left.is_empty() {
-            Some((
+            CompareResult::NotEqualDiffElements(
                 format!("{in_left_not_right:?}"),
                 format!("{in_right_not_left:?}"),
-            ))
+            )
+        } else if left.len() != right.len() {
+            CompareResult::NotEqualDupElemDiffLen(format!("{left:?}"), format!("{right:?}"))
         } else {
-            None
+            CompareResult::Equal
         }
     } else {
-        None
+        CompareResult::Equal
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::compare_unordered;
     #[cfg(feature = "std")]
     use crate::compare_unordered_set;
+    use crate::{compare_unordered, CompareResult};
     use alloc::vec;
 
     #[test]
-    fn compare_unordered_not_equal() {
+    fn compare_unordered_not_equal_diff_elem() {
         #[derive(Debug, PartialEq)]
         struct MyType(i32);
 
@@ -247,16 +268,52 @@ mod tests {
         let right = vec![MyType(2), MyType(0), MyType(4)];
 
         match compare_unordered(left, right) {
-            Some((left_actual, right_actual)) => {
+            CompareResult::NotEqualDiffElements(left_actual, right_actual) => {
                 let left_expected = "[MyType(1), MyType(5)]";
                 let right_expected = "[MyType(0)]";
                 assert_eq!(left_expected, left_actual);
                 assert_eq!(right_expected, right_actual);
             }
-            None => {
-                panic!("Left and right were equal, but should not have been");
+            _ => {
+                panic!("Left and right were expected to have have different elements");
             }
         }
+    }
+
+    #[test]
+    fn compare_unordered_not_equal_dup_elem() {
+        #[derive(Debug, PartialEq)]
+        struct MyType(i32);
+
+        let left = vec![MyType(2), MyType(4), MyType(4)];
+        let right = vec![MyType(4), MyType(2)];
+
+        match compare_unordered(left, right) {
+            CompareResult::NotEqualDupElemDiffLen(left_actual, right_actual) => {
+                let left_expected = "[MyType(2), MyType(4), MyType(4)]";
+                let right_expected = "[MyType(4), MyType(2)]";
+                assert_eq!(left_expected, left_actual);
+                assert_eq!(right_expected, right_actual);
+            }
+            _ => {
+                panic!("Left and right were expected to have have different elements");
+            }
+        }
+    }
+
+    // Side effect of not having Ord and being able to sort
+    #[test]
+    fn compare_unordered_equal_dup_elem() {
+        #[derive(Debug, PartialEq)]
+        struct MyType(i32);
+
+        let left = vec![MyType(2), MyType(2), MyType(2), MyType(4)];
+        let right = vec![MyType(2), MyType(4), MyType(4), MyType(4)];
+
+        assert!(matches!(
+            compare_unordered(left, right),
+            CompareResult::Equal
+        ));
     }
 
     #[test]
@@ -267,7 +324,10 @@ mod tests {
         let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
         let right = vec![MyType(5), MyType(2), MyType(1), MyType(4)];
 
-        assert!(compare_unordered(left, right).is_none());
+        assert!(matches!(
+            compare_unordered(left, right),
+            CompareResult::Equal
+        ));
     }
 
     #[cfg(feature = "std")]
@@ -280,14 +340,14 @@ mod tests {
         let right = vec![MyType(2), MyType(0), MyType(4)];
 
         match compare_unordered_set(left, right) {
-            Some((left_actual, right_actual)) => {
+            CompareResult::NotEqualDiffElements(left_actual, right_actual) => {
                 let left_expected = "{MyType(1)}";
                 let right_expected = "{MyType(0)}";
                 assert_eq!(left_expected, left_actual);
                 assert_eq!(right_expected, right_actual);
             }
-            None => {
-                panic!("Left and right were equal, but should not have been");
+            _ => {
+                panic!("Left and right were expected to have have different elements");
             }
         }
     }
@@ -301,6 +361,25 @@ mod tests {
         let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
         let right = vec![MyType(5), MyType(2), MyType(1), MyType(4)];
 
-        assert!(compare_unordered_set(left, right).is_none());
+        assert!(matches!(
+            compare_unordered_set(left, right),
+            CompareResult::Equal
+        ));
+    }
+
+    // Side effect of using a set
+    #[cfg(feature = "std")]
+    #[test]
+    fn compare_unordered_set_equal_dup_elem() {
+        #[derive(Debug, Eq, Hash, PartialEq)]
+        struct MyType(i32);
+
+        let left = vec![MyType(2), MyType(4), MyType(4)];
+        let right = vec![MyType(4), MyType(2)];
+
+        assert!(matches!(
+            compare_unordered_set(left, right),
+            CompareResult::Equal
+        ));
     }
 }
