@@ -14,7 +14,7 @@ therefore shows only the differences (see below for an example of what the outpu
 ## Usage
 
 NOTE: Specifying `no-default-features` will allow this crate to be used in a
-`no-std` environment, but without the `assert_ordered_set!` macro.
+`no-std` environment, but without the `assert_eq_ordered_set` macro.
 
 ```toml
 [dev-dependencies]
