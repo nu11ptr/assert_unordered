@@ -115,7 +115,7 @@ pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
             };
 
             panic!(
-                "{msg}:\nIn both: {in_both}\nIn left: {in_left_not_right}\nIn right, not left: {in_right_not_left}"
+                "{msg}:\nIn both: {in_both}\nIn left: {in_left_not_right}\nIn right: {in_right_not_left}"
             );
         }
         CompareResult::Equal => {}
