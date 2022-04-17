@@ -220,9 +220,9 @@ where
 
         if !in_left_not_right.is_empty() || !in_right_not_left.is_empty() {
             CompareResult::NotEqualDiffElements(
-                format!("{in_both:?}"),
-                format!("{in_left_not_right:?}"),
-                format!("{in_right_not_left:?}"),
+                format!("{in_both:#?}"),
+                format!("{in_left_not_right:#?}"),
+                format!("{in_right_not_left:#?}"),
             )
         } else {
             CompareResult::Equal
@@ -235,19 +235,23 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{compare_unordered, CompareResult};
-    use alloc::vec;
+    use alloc::vec::Vec;
+    use alloc::{format, vec};
+
+    #[derive(Debug, PartialEq)]
+    struct MyType(i32);
 
     fn validate_results(
         result: CompareResult,
-        both_expected: &str,
-        left_expected: &str,
-        right_expected: &str,
+        both_expected: Vec<MyType>,
+        left_expected: Vec<MyType>,
+        right_expected: Vec<MyType>,
     ) {
         match result {
             CompareResult::NotEqualDiffElements(both_actual, left_actual, right_actual) => {
-                assert_eq!(both_expected, both_actual);
-                assert_eq!(left_expected, left_actual);
-                assert_eq!(right_expected, right_actual);
+                assert_eq!(format!("{both_expected:#?}"), both_actual);
+                assert_eq!(format!("{left_expected:#?}"), left_actual);
+                assert_eq!(format!("{right_expected:#?}"), right_actual);
             }
             _ => {
                 panic!("Left and right were expected to have have different elements");
@@ -257,57 +261,45 @@ mod tests {
 
     #[test]
     fn compare_unordered_not_equal_diff_elem() {
-        #[derive(Debug, PartialEq)]
-        struct MyType(i32);
-
         let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
         let right = vec![MyType(2), MyType(0), MyType(4)];
 
         validate_results(
             compare_unordered(left, right),
-            "[MyType(2), MyType(4)]",
-            "[MyType(1), MyType(5)]",
-            "[MyType(0)]",
+            vec![MyType(2), MyType(4)],
+            vec![MyType(1), MyType(5)],
+            vec![MyType(0)],
         );
     }
 
     #[test]
     fn compare_unordered_not_equal_dup_elem_diff_len() {
-        #[derive(Debug, PartialEq)]
-        struct MyType(i32);
-
         let left = vec![MyType(2), MyType(4), MyType(4)];
         let right = vec![MyType(4), MyType(2)];
 
         validate_results(
             compare_unordered(left, right),
-            "[MyType(2), MyType(4)]",
-            "[MyType(4)]",
-            "[]",
+            vec![MyType(2), MyType(4)],
+            vec![MyType(4)],
+            vec![],
         );
     }
 
     #[test]
     fn compare_unordered_not_equal_dup_elem() {
-        #[derive(Debug, PartialEq)]
-        struct MyType(i32);
-
         let left = vec![MyType(2), MyType(2), MyType(2), MyType(4)];
         let right = vec![MyType(2), MyType(4), MyType(4), MyType(4)];
 
         validate_results(
             compare_unordered(left, right),
-            "[MyType(2), MyType(4)]",
-            "[MyType(2), MyType(2)]",
-            "[MyType(4), MyType(4)]",
+            vec![MyType(2), MyType(4)],
+            vec![MyType(2), MyType(2)],
+            vec![MyType(4), MyType(4)],
         );
     }
 
     #[test]
     fn compare_unordered_equal_diff_order() {
-        #[derive(Debug, PartialEq)]
-        struct MyType(i32);
-
         let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
         let right = vec![MyType(5), MyType(2), MyType(1), MyType(4)];
 
@@ -319,9 +311,6 @@ mod tests {
 
     #[test]
     fn compare_unordered_equal_same_order() {
-        #[derive(Debug, PartialEq)]
-        struct MyType(i32);
-
         let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
         let right = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
 
