@@ -1,6 +1,6 @@
 [package]
 name = "assert_unordered"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Scott Meeuwsen <smeeuwsen@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "A direct replacement for `assert_eq` for unordered collections"
@@ -16,5 +16,9 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["std"]
+color = ["ansi_term", "std"]
+default = ["color"]
 std = []
+
+[dependencies]
+ansi_term = { version = "0.12", optional = true }

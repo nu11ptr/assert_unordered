@@ -1,6 +1,3 @@
-#![no_std]
-#![warn(missing_docs)]
-
 //! A direct replacement for `assert_eq` for unordered collections
 //!
 //! This macro is useful for any situation where the ordering of the collection doesn't matter, even
@@ -30,6 +27,10 @@
 //! In right: "[MyType(0)]"'
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+
 // Trick to test README samples (from: https://github.com/rust-lang/cargo/issues/383#issuecomment-720873790)
 #[cfg(doctest)]
 mod test_readme {
@@ -49,6 +50,17 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{Arguments, Debug};
+#[cfg(feature = "color")]
+#[cfg(windows)]
+use std::sync::Once;
+
+#[cfg(feature = "color")]
+#[cfg(windows)]
+static INIT_COLOR: Once = Once::new();
+
+#[cfg(feature = "color")]
+#[cfg(windows)]
+static mut COLOR_ENABLED: bool = false;
 
 /// Assert that `$left` and `$right` are "unordered" equal. That is, they contain the same elements,
 /// but not necessarily in the same order. If this assertion is false, a panic is raised, and the
@@ -98,14 +110,79 @@ macro_rules! assert_eq_unordered {
     };
 }
 
+#[cfg(feature = "color")]
+#[cfg(windows)]
+#[inline]
+fn init_color() -> bool {
+    // SAFETY: This is the example given in stdlib docs for how to init a mutable static var
+    unsafe {
+        INIT_COLOR.call_once(|| {
+            COLOR_ENABLED = ansi_term::enable_ansi_support().is_ok();
+        });
+        COLOR_ENABLED
+    }
+}
+
+#[cfg(feature = "color")]
+#[cfg(not(windows))]
+#[inline]
+const fn init_color() -> bool {
+    true
+}
+
 #[doc(hidden)]
 pub enum CompareResult {
     Equal,
     NotEqualDiffElements(String, String, String),
 }
 
+#[cfg(feature = "color")]
 #[doc(hidden)]
+#[inline]
 pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
+    if init_color() {
+        color_pass_or_panic(result, msg)
+    } else {
+        plain_pass_or_panic(result, msg);
+    }
+}
+
+#[cfg(not(feature = "color"))]
+#[doc(hidden)]
+#[inline]
+pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
+    plain_pass_or_panic(result, msg);
+}
+
+#[cfg(feature = "color")]
+fn color_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
+    match result {
+        CompareResult::NotEqualDiffElements(in_both, in_left_not_right, in_right_not_left) => {
+            use ansi_term::Color::{Green, Red, Yellow};
+
+            let msg = match msg {
+                Some(msg) => msg.to_string(),
+                None => {
+                    format!(
+                        "The {} did not contain the {} as the {}",
+                        Red.paint("left"),
+                        Yellow.paint("same items"),
+                        Green.paint("right"),
+                    )
+                }
+            };
+
+            let both = Yellow.paint(format!("In both: {in_both}"));
+            let left = Red.paint(format!("In left: {in_left_not_right}"));
+            let right = Green.paint(format!("In right: {in_right_not_left}"));
+
+            panic!("{msg}:\n{both}\n{left}\n{right}\n");
+        }
+        CompareResult::Equal => {}
+    }
+}
+
+fn plain_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     match result {
         CompareResult::NotEqualDiffElements(in_both, in_left_not_right, in_right_not_left) => {
             let msg = match msg {

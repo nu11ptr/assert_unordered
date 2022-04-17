@@ -11,7 +11,11 @@ collection for both left and right and leaves it up to the user to visually scan
 In contrast, this crate only works with collections (types that implement `IntoIterator`) and
 therefore can show only the differences (see below for an example of what the output looks like).
 
+NOTE: As of 0.3.2, the output by default is in color similar to `pretty_assertions`
+
 ## Usage
+
+NOTE: `no-default-features` can be used to disable color output (and enable `no-std` support)
 
 ```toml
 [dev-dependencies]
@@ -34,12 +38,7 @@ fn main() {
 ```
 
 Output:
-```text
-thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-In both: "[MyType(2), MyType(4)]"
-In left: "[MyType(1), MyType(5)]"
-In right: "[MyType(0)]"'
-```
+![example_error](example_error.png)
 
 ## License
 
