@@ -6,6 +6,19 @@
 //! In contrast, this crate only works with collections (types that implement `IntoIterator`) and
 //! therefore can show only the differences (see below for an example of what the output looks like).
 //!
+//! # Which Macro?
+//!
+//! TLDR; - favor `assert_eq_unordered_sort` unless the trait requirements can't be met
+//!
+//! * [assert_eq_unordered]
+//!     * Requires only `Debug` and `PartialEq` on the elements
+//!     * Collection level equality check, and if unequal, falls back to item by item compare (O(n^2))
+//! * [assert_eq_unordered_sort]
+//!     * Requires `Debug`, `Eq` and `Ord` on the elements
+//!     * Collection level equality check, and if unequal, sorts and then compares again,
+//!       and if still unequal, falls back to item by item compare (O(n^2))
+
+//!
 //! # Example
 //! ```should_panic
 //! use assert_unordered::assert_eq_unordered;
@@ -41,6 +54,7 @@ mod test_readme {
 }
 
 extern crate alloc;
+extern crate core;
 
 use alloc::format;
 use alloc::string::String;
@@ -70,7 +84,7 @@ static mut COLOR_ENABLED: bool = false;
 /// # Efficiency
 /// If `$left` and `$right` are equal, this assertion is quite efficient just doing a regular equality
 /// check and then returning. If they are not equal, `$left` and `$right` are collected into a [Vec]
-/// and the elements compared one by one for both `$left` and `$right` (meaning it is at least least
+/// and the elements compared one by one for both `$left` and `$right` (meaning it is at least
 /// O(n^2) algorithmic complexity in the non-equality path).
 ///
 /// # Example
@@ -89,7 +103,6 @@ static mut COLOR_ENABLED: bool = false;
 /// Output:
 ///
 /// ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
-
 #[macro_export]
 macro_rules! assert_eq_unordered {
     ($left:expr, $right:expr $(,)?) => {
@@ -98,6 +111,50 @@ macro_rules! assert_eq_unordered {
     ($left:expr, $right:expr, $($arg:tt)+) => {
         $crate::pass_or_panic(
             $crate::compare_unordered($left, $right),
+            core::option::Option::Some(core::format_args!($($arg)+))
+        );
+    };
+}
+
+/// Assert that `$left` and `$right` are "unordered" equal. That is, they contain the same elements,
+/// but not necessarily in the same order. If this assertion is false, a panic is raised, and the
+/// elements that are different between `$left` and `$right` are shown (when possible).
+///
+/// Both `$left` and `$right` must be of the same type and implement [PartialEq] and [Iterator] or
+/// [IntoIterator], but otherwise can be any type. The iterator `Item` type can be any type that
+/// implements [Debug], [Ord], and [Eq]. Optional `$arg` parameters may be given to customize the
+/// error message, if any (these are the same as the parameters passed to [format!]).
+///
+/// # Efficiency
+/// If `$left` and `$right` are equal, this assertion is quite efficient just doing a regular equality
+/// check and then returning. If they are not equal, `$left` and `$right` are sorted and compared again.
+/// If still not equal, the elements compared one by one for both `$left` and `$right` (meaning it
+/// is at least O(n^2) algorithmic complexity, if not equal by this point).
+///
+/// # Example
+/// ```should_panic
+/// use assert_unordered::assert_eq_unordered_sort;
+///
+/// #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// struct MyType(i32);
+///
+/// let expected = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
+/// let actual = vec![MyType(2), MyType(0), MyType(4)];
+///
+/// assert_eq_unordered_sort!(expected, actual);
+///  ```
+///
+/// Output:
+///
+/// ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
+#[macro_export]
+macro_rules! assert_eq_unordered_sort {
+    ($left:expr, $right:expr $(,)?) => {
+        $crate::pass_or_panic($crate::compare_unordered_sort($left, $right), core::option::Option::None);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        $crate::pass_or_panic(
+            $crate::compare_unordered_sort($left, $right),
             core::option::Option::Some(core::format_args!($($arg)+))
         );
     };
@@ -192,6 +249,39 @@ fn plain_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     }
 }
 
+fn compare_elem_by_elem<I, T>(left: I, right: Vec<T>) -> CompareResult
+where
+    I: IntoIterator<Item = T> + PartialEq,
+    T: Debug + PartialEq,
+{
+    let mut in_right_not_left: Vec<_> = right;
+    let mut in_left_not_right = Vec::new();
+    // Optimistically assume we likely got it close to right
+    let mut in_both = Vec::with_capacity(in_right_not_left.len());
+
+    for elem1 in left {
+        match in_right_not_left.iter().position(|elem2| &elem1 == elem2) {
+            Some(idx) => {
+                in_both.push(elem1);
+                in_right_not_left.remove(idx);
+            }
+            None => {
+                in_left_not_right.push(elem1);
+            }
+        }
+    }
+
+    if !in_left_not_right.is_empty() || !in_right_not_left.is_empty() {
+        CompareResult::NotEqualDiffElements(
+            format!("{in_both:#?}"),
+            format!("{in_left_not_right:#?}"),
+            format!("{in_right_not_left:#?}"),
+        )
+    } else {
+        CompareResult::Equal
+    }
+}
+
 #[doc(hidden)]
 pub fn compare_unordered<I, T>(left: I, right: I) -> CompareResult
 where
@@ -200,30 +290,32 @@ where
 {
     // First, try for the easy (and faster compare)
     if left != right {
-        // Fallback on the slow unordered path
-        let mut in_right_not_left: Vec<_> = right.into_iter().collect();
-        let mut in_left_not_right = Vec::new();
-        // Optimistically assume we likely got it close to right
-        let mut in_both = Vec::with_capacity(in_right_not_left.len());
+        // Fallback on the slow one by one compare
+        let right = right.into_iter().collect();
+        compare_elem_by_elem(left, right)
+    } else {
+        CompareResult::Equal
+    }
+}
 
-        for elem1 in left {
-            match in_right_not_left.iter().position(|elem2| &elem1 == elem2) {
-                Some(idx) => {
-                    in_both.push(elem1);
-                    in_right_not_left.remove(idx);
-                }
-                None => {
-                    in_left_not_right.push(elem1);
-                }
-            }
-        }
+#[doc(hidden)]
+pub fn compare_unordered_sort<I, T>(left: I, right: I) -> CompareResult
+where
+    I: IntoIterator<Item = T> + PartialEq,
+    T: Debug + Ord + PartialEq,
+{
+    // First, try for the easy (and faster compare)
+    if left != right {
+        // Next, try and sort under assumption these are equal, but might be out of order
+        let mut left: Vec<_> = left.into_iter().collect();
+        let mut right: Vec<_> = right.into_iter().collect();
 
-        if !in_left_not_right.is_empty() || !in_right_not_left.is_empty() {
-            CompareResult::NotEqualDiffElements(
-                format!("{in_both:#?}"),
-                format!("{in_left_not_right:#?}"),
-                format!("{in_right_not_left:#?}"),
-            )
+        left.sort_unstable();
+        right.sort_unstable();
+
+        if left != right {
+            // Fallback on the slow one by one compare
+            compare_elem_by_elem(left, right)
         } else {
             CompareResult::Equal
         }
@@ -234,18 +326,22 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{compare_unordered, CompareResult};
+    use crate::{compare_unordered, compare_unordered_sort, CompareResult};
     use alloc::vec::Vec;
     use alloc::{format, vec};
+    use core::fmt::Debug;
 
     #[derive(Debug, PartialEq)]
     struct MyType(i32);
 
-    fn validate_results(
+    #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+    struct MyTypeSort(i32);
+
+    fn validate_results<T: Debug>(
         result: CompareResult,
-        both_expected: Vec<MyType>,
-        left_expected: Vec<MyType>,
-        right_expected: Vec<MyType>,
+        both_expected: Vec<T>,
+        left_expected: Vec<T>,
+        right_expected: Vec<T>,
     ) {
         match result {
             CompareResult::NotEqualDiffElements(both_actual, left_actual, right_actual) => {
@@ -259,64 +355,74 @@ mod tests {
         }
     }
 
-    #[test]
-    fn compare_unordered_not_equal_diff_elem() {
-        let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
-        let right = vec![MyType(2), MyType(0), MyType(4)];
+    macro_rules! make_tests {
+        ($func:ident, $type:ident) => {
+            #[test]
+            fn compare_unordered_not_equal_diff_elem() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)];
+                let right = vec![$type(2), $type(0), $type(4)];
 
-        validate_results(
-            compare_unordered(left, right),
-            vec![MyType(2), MyType(4)],
-            vec![MyType(1), MyType(5)],
-            vec![MyType(0)],
-        );
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(1), $type(5)],
+                    vec![$type(0)],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_not_equal_dup_elem_diff_len() {
+                let left = vec![$type(2), $type(4), $type(4)];
+                let right = vec![$type(4), $type(2)];
+
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(4)],
+                    vec![],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_not_equal_dup_elem() {
+                let left = vec![$type(2), $type(2), $type(2), $type(4)];
+                let right = vec![$type(2), $type(4), $type(4), $type(4)];
+
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(2), $type(2)],
+                    vec![$type(4), $type(4)],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_equal_diff_order() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)];
+                let right = vec![$type(5), $type(2), $type(1), $type(4)];
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+
+            #[test]
+            fn compare_unordered_equal_same_order() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)];
+                let right = vec![$type(1), $type(2), $type(4), $type(5)];
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+        };
     }
 
-    #[test]
-    fn compare_unordered_not_equal_dup_elem_diff_len() {
-        let left = vec![MyType(2), MyType(4), MyType(4)];
-        let right = vec![MyType(4), MyType(2)];
+    mod regular {
+        use super::*;
 
-        validate_results(
-            compare_unordered(left, right),
-            vec![MyType(2), MyType(4)],
-            vec![MyType(4)],
-            vec![],
-        );
+        make_tests!(compare_unordered, MyType);
     }
 
-    #[test]
-    fn compare_unordered_not_equal_dup_elem() {
-        let left = vec![MyType(2), MyType(2), MyType(2), MyType(4)];
-        let right = vec![MyType(2), MyType(4), MyType(4), MyType(4)];
+    mod sort {
+        use super::*;
 
-        validate_results(
-            compare_unordered(left, right),
-            vec![MyType(2), MyType(4)],
-            vec![MyType(2), MyType(2)],
-            vec![MyType(4), MyType(4)],
-        );
-    }
-
-    #[test]
-    fn compare_unordered_equal_diff_order() {
-        let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
-        let right = vec![MyType(5), MyType(2), MyType(1), MyType(4)];
-
-        assert!(matches!(
-            compare_unordered(left, right),
-            CompareResult::Equal
-        ));
-    }
-
-    #[test]
-    fn compare_unordered_equal_same_order() {
-        let left = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
-        let right = vec![MyType(1), MyType(2), MyType(4), MyType(5)];
-
-        assert!(matches!(
-            compare_unordered(left, right),
-            CompareResult::Equal
-        ));
+        make_tests!(compare_unordered_sort, MyTypeSort);
     }
 }

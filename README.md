@@ -22,6 +22,19 @@ NOTE: `no-default-features` can be used to disable color output (and enable `no-
 assert_unordered = "0.3"
 ```
 
+# Which Macro?
+
+TLDR; - favor `assert_eq_unordered_sort` unless the trait requirements can't be met
+
+* [assert_eq_unordered](https://docs.rs/assert_unordered/0.3.3/assert_unordered/macro.assert_eq_unordered.html)
+    * Requires only `Debug` and `PartialEq` on the elements
+    * Collection level equality check, and if unequal, falls back to item by item compare (O(n^2))
+* [assert_eq_unordered_sort](https://docs.rs/assert_unordered/0.3.3/assert_unordered/macro.assert_eq_unordered_sort.html)
+    * Requires `Debug`, `Eq` and `Ord` on the elements
+    * Collection level equality check, and if unequal, sorts and then compares again, 
+      and if still unequal, falls back to item by item compare (O(n^2))
+
+
 ## Example
 ```rust, should_panic
 use assert_unordered::assert_eq_unordered;
