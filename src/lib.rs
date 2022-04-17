@@ -20,12 +20,8 @@
 //! ```
 //!
 //! Output:
-//! ```text
-//! thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-//! In both: "[MyType(2), MyType(4)]"
-//! In left: "[MyType(1), MyType(5)]"
-//! In right: "[MyType(0)]"'
-//! ```
+//!  
+//! ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -91,12 +87,9 @@ static mut COLOR_ENABLED: bool = false;
 ///  ```
 ///
 /// Output:
-/// ```text
-/// thread 'tests::test' panicked at 'The left did not contain the same items as the right:
-/// In both: "[MyType(2), MyType(4)]"
-/// In left: "{MyType(1), MyType(5)}"
-/// In right: "{MyType(0)}"'
-/// ```
+///
+/// ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
+
 #[macro_export]
 macro_rules! assert_eq_unordered {
     ($left:expr, $right:expr $(,)?) => {

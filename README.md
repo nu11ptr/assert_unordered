@@ -38,6 +38,7 @@ fn main() {
 ```
 
 Output:
+
 ![example_error](example_error.png)
 
 ## License
