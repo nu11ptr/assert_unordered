@@ -116,6 +116,38 @@ macro_rules! assert_eq_unordered {
     };
 }
 
+/// The same as [assert_eq_unordered], but for types that implement only [Iterator] or [IntoIterator] (and not [PartialEq]).
+/// It will be less efficient if the collections are equal, as it skips the initial equality check.
+///
+/// # Example
+/// ```should_panic
+/// use assert_unordered::assert_eq_unordered_iter;
+///
+/// #[derive(Debug, PartialEq)]
+/// struct MyType(i32);
+///
+/// let expected = vec![MyType(1), MyType(2), MyType(4), MyType(5)].into_iter();
+/// let actual = vec![MyType(2), MyType(0), MyType(4)].into_iter();
+///
+/// assert_eq_unordered_iter!(expected, actual);
+///  ```
+///
+/// Output:
+///
+/// ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
+#[macro_export]
+macro_rules! assert_eq_unordered_iter {
+    ($left:expr, $right:expr $(,)?) => {
+        $crate::pass_or_panic($crate::compare_unordered_iter($left, $right), core::option::Option::None);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        $crate::pass_or_panic(
+            $crate::compare_unordered_iter($left, $right),
+            core::option::Option::Some(core::format_args!($($arg)+))
+        );
+    };
+}
+
 /// Assert that `$left` and `$right` are "unordered" equal. That is, they contain the same elements,
 /// but not necessarily in the same order. If this assertion is false, a panic is raised, and the
 /// elements that are different between `$left` and `$right` are shown (when possible).
@@ -155,6 +187,38 @@ macro_rules! assert_eq_unordered_sort {
     ($left:expr, $right:expr, $($arg:tt)+) => {
         $crate::pass_or_panic(
             $crate::compare_unordered_sort($left, $right),
+            core::option::Option::Some(core::format_args!($($arg)+))
+        );
+    };
+}
+
+/// The same as [assert_eq_unordered_sort], but for types that implement only [Iterator] or [IntoIterator] (and not [PartialEq]).
+/// It will be less efficient if the collections are equal, as it skips the initial equality check.
+///
+/// # Example
+/// ```should_panic
+/// use assert_unordered::assert_eq_unordered_sort_iter;
+///
+/// #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// struct MyType(i32);
+///
+/// let expected = vec![MyType(1), MyType(2), MyType(4), MyType(5)].into_iter();
+/// let actual = vec![MyType(2), MyType(0), MyType(4)].into_iter();
+///
+/// assert_eq_unordered_sort_iter!(expected, actual);
+///  ```
+///
+/// Output:
+///
+/// ![example_error](https://raw.githubusercontent.com/nu11ptr/assert_unordered/master/example_error.png)
+#[macro_export]
+macro_rules! assert_eq_unordered_sort_iter {
+    ($left:expr, $right:expr $(,)?) => {
+        $crate::pass_or_panic($crate::compare_unordered_sort_iter($left, $right), core::option::Option::None);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        $crate::pass_or_panic(
+            $crate::compare_unordered_sort_iter($left, $right),
             core::option::Option::Some(core::format_args!($($arg)+))
         );
     };
@@ -283,6 +347,16 @@ where
 }
 
 #[doc(hidden)]
+pub fn compare_unordered_iter<I, T>(left: I, right: I) -> CompareResult
+where
+    I: IntoIterator<Item = T>,
+    T: Debug + PartialEq,
+{
+    let right = right.into_iter().collect();
+    compare_elem_by_elem(left, right)
+}
+
+#[doc(hidden)]
 pub fn compare_unordered<I, T>(left: I, right: I) -> CompareResult
 where
     I: IntoIterator<Item = T> + PartialEq,
@@ -291,7 +365,27 @@ where
     // First, try for the easy (and faster compare)
     if left != right {
         // Fallback on the slow one by one compare
-        let right = right.into_iter().collect();
+        compare_unordered_iter(left, right)
+    } else {
+        CompareResult::Equal
+    }
+}
+
+#[doc(hidden)]
+pub fn compare_unordered_sort_iter<I, T>(left: I, right: I) -> CompareResult
+where
+    I: IntoIterator<Item = T>,
+    T: Debug + Ord,
+{
+    // Try and sort under assumption these are equal, but might be out of order
+    let mut left: Vec<_> = left.into_iter().collect();
+    let mut right: Vec<_> = right.into_iter().collect();
+
+    left.sort_unstable();
+    right.sort_unstable();
+
+    if left != right {
+        // Fallback on the slow one by one compare
         compare_elem_by_elem(left, right)
     } else {
         CompareResult::Equal
@@ -306,19 +400,8 @@ where
 {
     // First, try for the easy (and faster compare)
     if left != right {
-        // Next, try and sort under assumption these are equal, but might be out of order
-        let mut left: Vec<_> = left.into_iter().collect();
-        let mut right: Vec<_> = right.into_iter().collect();
-
-        left.sort_unstable();
-        right.sort_unstable();
-
-        if left != right {
-            // Fallback on the slow one by one compare
-            compare_elem_by_elem(left, right)
-        } else {
-            CompareResult::Equal
-        }
+        // Fallback on the slow one by one compare
+        compare_unordered_sort_iter(left, right)
     } else {
         CompareResult::Equal
     }
@@ -326,7 +409,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{compare_unordered, compare_unordered_sort, CompareResult};
+    use crate::{
+        compare_unordered, compare_unordered_iter, compare_unordered_sort,
+        compare_unordered_sort_iter, CompareResult,
+    };
     use alloc::vec::Vec;
     use alloc::{format, vec};
     use core::fmt::Debug;
@@ -414,15 +500,86 @@ mod tests {
         };
     }
 
+    macro_rules! make_tests_iter {
+        ($func:ident, $type:ident) => {
+            #[test]
+            fn compare_unordered_not_equal_diff_elem() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
+                let right = vec![$type(2), $type(0), $type(4)].into_iter();
+
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(1), $type(5)],
+                    vec![$type(0)],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_not_equal_dup_elem_diff_len() {
+                let left = vec![$type(2), $type(4), $type(4)].into_iter();
+                let right = vec![$type(4), $type(2)].into_iter();
+
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(4)],
+                    vec![],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_not_equal_dup_elem() {
+                let left = vec![$type(2), $type(2), $type(2), $type(4)].into_iter();
+                let right = vec![$type(2), $type(4), $type(4), $type(4)].into_iter();
+
+                validate_results(
+                    $func(left, right),
+                    vec![$type(2), $type(4)],
+                    vec![$type(2), $type(2)],
+                    vec![$type(4), $type(4)],
+                );
+            }
+
+            #[test]
+            fn compare_unordered_equal_diff_order() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
+                let right = vec![$type(5), $type(2), $type(1), $type(4)].into_iter();
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+
+            #[test]
+            fn compare_unordered_equal_same_order() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
+                let right = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+        };
+    }
+
     mod regular {
         use super::*;
 
         make_tests!(compare_unordered, MyType);
     }
 
+    mod regular_iter {
+        use super::*;
+
+        make_tests_iter!(compare_unordered_iter, MyType);
+    }
+
     mod sort {
         use super::*;
 
         make_tests!(compare_unordered_sort, MyTypeSort);
+    }
+
+    mod sort_iter {
+        use super::*;
+
+        make_tests_iter!(compare_unordered_sort_iter, MyTypeSort);
     }
 }
