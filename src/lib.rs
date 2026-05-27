@@ -14,7 +14,7 @@
 //!     * Requires only `Debug` and `PartialEq` on the elements
 //!     * Collection level equality check, and if unequal, falls back to item by item compare (O(n^2))
 //! * [assert_eq_unordered_sort]
-//!     * Requires `Debug`, `Eq` and `Ord` on the elements
+//!     * Requires `Debug` and `Ord` on the elements
 //!     * Collection level equality check, and if unequal, sorts and then compares again,
 //!       and if still unequal, falls back to item by item compare (O(n^2))
 
@@ -122,7 +122,7 @@ macro_rules! assert_eq_unordered {
 ///
 /// Both `$left` and `$right` must be of the same type and implement [PartialEq] and [Iterator] or
 /// [IntoIterator], but otherwise can be any type. The iterator `Item` type can be any type that
-/// implements [Debug], [Ord], and [Eq]. Optional `$arg` parameters may be given to customize the
+/// implements [Debug] and [Ord]. Optional `$arg` parameters may be given to customize the
 /// error message, if any (these are the same as the parameters passed to [format!]).
 ///
 /// # Efficiency
@@ -251,7 +251,7 @@ fn plain_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
 
 fn compare_elem_by_elem<I, T>(left: I, right: Vec<T>) -> CompareResult
 where
-    I: IntoIterator<Item = T> + PartialEq,
+    I: IntoIterator<Item = T>,
     T: Debug + PartialEq,
 {
     let mut in_right_not_left: Vec<_> = right;
@@ -302,7 +302,7 @@ where
 pub fn compare_unordered_sort<I, T>(left: I, right: I) -> CompareResult
 where
     I: IntoIterator<Item = T> + PartialEq,
-    T: Debug + Ord + PartialEq,
+    T: Debug + Ord,
 {
     // First, try for the easy (and faster compare)
     if left != right {
