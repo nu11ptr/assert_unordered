@@ -9,8 +9,8 @@
 //! # Which Macro?
 //!
 //! TL;DR - favor `assert_eq_unordered_sort` unless the trait requirements can't be met.
-//! Use the regular versions for collections and the `*_iter` versions for iterators
-//! (or collections that aren't the same type).
+//! Use the regular versions for collections, and the `*_iter` versions for iterators
+//! (or differing collection types that don't support direct equality comparison).
 //!
 //! * [assert_eq_unordered]
 //!     * Requires only `Debug` and `PartialEq` on the elements
@@ -84,10 +84,11 @@ static mut COLOR_ENABLED: bool = false;
 /// but not necessarily in the same order. If this assertion is false, a panic is raised, and the
 /// elements that are different between `$left` and `$right` are shown (when possible).
 ///
-/// Both `$left` and `$right` must be of the same type and implement [PartialEq] and [Iterator] or
-/// [IntoIterator], but otherwise can be any type. The iterator `Item` type can be any type that
-/// implements [Debug] and [PartialEq]. Optional `$arg` parameters may be given to customize the
-/// error message, if any (these are the same as the parameters passed to [format!]).
+/// Both `$left` and `$right` must implement [Iterator] or [IntoIterator], and `$left` must implement
+/// [PartialEq] for `$right`, but otherwise can be any type. The iterator `Item` type must be the
+/// same for both sides and can be any type that implements [Debug] and [PartialEq]. Optional `$arg`
+/// parameters may be given to customize the error message, if any (these are the same as the
+/// parameters passed to [format!]).
 ///
 /// # Efficiency
 /// If `$left` and `$right` are equal, this assertion is quite efficient just doing a regular equality
@@ -161,10 +162,11 @@ macro_rules! assert_eq_unordered_iter {
 /// but not necessarily in the same order. If this assertion is false, a panic is raised, and the
 /// elements that are different between `$left` and `$right` are shown (when possible).
 ///
-/// Both `$left` and `$right` must be of the same type and implement [PartialEq] and [Iterator] or
-/// [IntoIterator], but otherwise can be any type. The iterator `Item` type can be any type that
-/// implements [Debug] and [Ord]. Optional `$arg` parameters may be given to customize the
-/// error message, if any (these are the same as the parameters passed to [format!]).
+/// Both `$left` and `$right` must implement [Iterator] or [IntoIterator], and `$left` must implement
+/// [PartialEq] for `$right`, but otherwise can be any type. The iterator `Item` type must be the
+/// same for both sides and can be any type that implements [Debug] and [Ord]. Optional `$arg`
+/// parameters may be given to customize the error message, if any (these are the same as the
+/// parameters passed to [format!]).
 ///
 /// # Efficiency
 /// If `$left` and `$right` are equal, this assertion is quite efficient just doing a regular equality
@@ -368,9 +370,10 @@ where
 }
 
 #[doc(hidden)]
-pub fn compare_unordered<I, T>(left: I, right: I) -> CompareResult
+pub fn compare_unordered<L, R, T>(left: L, right: R) -> CompareResult
 where
-    I: IntoIterator<Item = T> + PartialEq,
+    L: IntoIterator<Item = T> + PartialEq<R>,
+    R: IntoIterator<Item = T>,
     T: Debug + PartialEq,
 {
     // First, try for the easy (and faster compare)
@@ -405,9 +408,10 @@ where
 }
 
 #[doc(hidden)]
-pub fn compare_unordered_sort<I, T>(left: I, right: I) -> CompareResult
+pub fn compare_unordered_sort<L, R, T>(left: L, right: R) -> CompareResult
 where
-    I: IntoIterator<Item = T> + PartialEq,
+    L: IntoIterator<Item = T> + PartialEq<R>,
+    R: IntoIterator<Item = T>,
     T: Debug + Ord,
 {
     // First, try for the easy (and faster compare)
@@ -506,6 +510,14 @@ mod tests {
             fn compare_unordered_equal_same_order() {
                 let left = vec![$type(1), $type(2), $type(4), $type(5)];
                 let right = vec![$type(1), $type(2), $type(4), $type(5)];
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+
+            #[test]
+            fn compare_unordered_equal_different_collection_types() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)];
+                let right = [$type(5), $type(2), $type(1), $type(4)];
 
                 assert!(matches!($func(left, right), CompareResult::Equal));
             }
