@@ -11,15 +11,13 @@ collection for both left and right and leaves it up to the user to visually scan
 In contrast, this crate only works with collections (types that implement `IntoIterator`) and
 therefore can show only the differences (see below for an example of what the output looks like).
 
-NOTE: As of 0.3.2, the output by default is in color similar to `pretty_assertions`
-
 ## Usage
 
 NOTE: `no-default-features` can be used to disable color output (and enable `no-std` support)
 
 ```toml
 [dev-dependencies]
-assert_unordered = "0.3"
+assert_unordered = "0.4"
 ```
 
 # Which Macro?
