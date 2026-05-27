@@ -8,7 +8,9 @@
 //!
 //! # Which Macro?
 //!
-//! TLDR; - favor `assert_eq_unordered_sort` unless the trait requirements can't be met
+//! TL;DR - favor `assert_eq_unordered_sort` unless the trait requirements can't be met.
+//! Use the regular versions for collections and the `*_iter` versions for iterators
+//! (or collections that aren't the same type).
 //!
 //! * [assert_eq_unordered]
 //!     * Requires only `Debug` and `PartialEq` on the elements
@@ -17,6 +19,12 @@
 //!     * Requires `Debug` and `Ord` on the elements
 //!     * Collection level equality check, and if unequal, sorts and then compares again,
 //!       and if still unequal, falls back to item by item compare (O(n^2))
+//! * [assert_eq_unordered_iter]
+//!     * Requires only `Debug` and `PartialEq` on the elements
+//!     * Does only item by item compare (O(n^2))
+//! * [assert_eq_unordered_sort_iter]
+//!     * Requires `Debug` and `Ord` on the elements
+//!     * Sorts and then compares. If unequal, falls back to item by item compare (O(n^2))
 
 //!
 //! # Example
@@ -116,7 +124,8 @@ macro_rules! assert_eq_unordered {
     };
 }
 
-/// The same as [assert_eq_unordered], but for types that implement only [Iterator] or [IntoIterator] (and not [PartialEq]).
+/// The same as [assert_eq_unordered], but for types that implement [Iterator] or [IntoIterator]
+/// without requiring [PartialEq]. The left and right sides do not need to have the same type.
 /// It will be less efficient if the collections are equal, as it skips the initial equality check.
 ///
 /// # Example
@@ -192,7 +201,8 @@ macro_rules! assert_eq_unordered_sort {
     };
 }
 
-/// The same as [assert_eq_unordered_sort], but for types that implement only [Iterator] or [IntoIterator] (and not [PartialEq]).
+/// The same as [assert_eq_unordered_sort], but for types that implement [Iterator] or [IntoIterator]
+/// without requiring [PartialEq]. The left and right sides do not need to have the same type.
 /// It will be less efficient if the collections are equal, as it skips the initial equality check.
 ///
 /// # Example
@@ -347,9 +357,10 @@ where
 }
 
 #[doc(hidden)]
-pub fn compare_unordered_iter<I, T>(left: I, right: I) -> CompareResult
+pub fn compare_unordered_iter<L, R, T>(left: L, right: R) -> CompareResult
 where
-    I: IntoIterator<Item = T>,
+    L: IntoIterator<Item = T>,
+    R: IntoIterator<Item = T>,
     T: Debug + PartialEq,
 {
     let right = right.into_iter().collect();
@@ -372,9 +383,10 @@ where
 }
 
 #[doc(hidden)]
-pub fn compare_unordered_sort_iter<I, T>(left: I, right: I) -> CompareResult
+pub fn compare_unordered_sort_iter<L, R, T>(left: L, right: R) -> CompareResult
 where
-    I: IntoIterator<Item = T>,
+    L: IntoIterator<Item = T>,
+    R: IntoIterator<Item = T>,
     T: Debug + Ord,
 {
     // Try and sort under assumption these are equal, but might be out of order
@@ -553,6 +565,14 @@ mod tests {
             fn compare_unordered_equal_same_order() {
                 let left = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
                 let right = vec![$type(1), $type(2), $type(4), $type(5)].into_iter();
+
+                assert!(matches!($func(left, right), CompareResult::Equal));
+            }
+
+            #[test]
+            fn compare_unordered_equal_different_iterator_types() {
+                let left = vec![$type(1), $type(2), $type(4), $type(5)];
+                let right = [$type(5), $type(2), $type(1), $type(4)].into_iter();
 
                 assert!(matches!($func(left, right), CompareResult::Equal));
             }

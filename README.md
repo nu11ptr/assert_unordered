@@ -24,8 +24,7 @@ assert_unordered = "0.3"
 
 # Which Macro?
 
-TL;DR - favor `assert_eq_unordered_sort` unless the trait requirements can't be met. Use the regular versions for collections
-and `*_iter` versions for iterators.
+TL;DR - favor `assert_eq_unordered_sort` unless the trait requirements can't be met. Use the regular versions for collections and the `*_iter` versions for iterators (or collections that aren't the same type).
 
 * [assert_eq_unordered](https://docs.rs/assert_unordered/latest/assert_unordered/macro.assert_eq_unordered.html)
     * Requires only `Debug` and `PartialEq` on the elements
