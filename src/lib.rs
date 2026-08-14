@@ -265,6 +265,7 @@ pub enum CompareResult {
 #[cfg(feature = "color")]
 #[doc(hidden)]
 #[inline]
+#[track_caller]
 pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     if init_color() {
         color_pass_or_panic(result, msg)
@@ -276,11 +277,13 @@ pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
 #[cfg(not(feature = "color"))]
 #[doc(hidden)]
 #[inline]
+#[track_caller]
 pub fn pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     plain_pass_or_panic(result, msg);
 }
 
 #[cfg(feature = "color")]
+#[track_caller]
 fn color_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     match result {
         CompareResult::NotEqualDiffElements(in_both, in_left_not_right, in_right_not_left) => {
@@ -308,6 +311,7 @@ fn color_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     }
 }
 
+#[track_caller]
 fn plain_pass_or_panic(result: CompareResult, msg: Option<Arguments>) {
     match result {
         CompareResult::NotEqualDiffElements(in_both, in_left_not_right, in_right_not_left) => {
